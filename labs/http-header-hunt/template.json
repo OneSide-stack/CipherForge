@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "id": "http-header-hunt",
+  "version": "1.2.0",
+  "status": "published",
+  "title": "HTTP Header Hunt",
+  "subtitle": "Harden the Nimbus Freight customer portal",
+  "category": "Web Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 25,
+  "skills": [
+    "HTTP response headers",
+    "Content-Security-Policy",
+    "HSTS",
+    "curl",
+    "Defensive configuration"
+  ],
+  "summary": "The Nimbus Freight portal is shipping responses with almost no browser security controls, and a build token is leaking in a response header. Audit the live service, then apply a hardened header policy and prove the fix.",
+  "scenario": "You are a security engineer on the Nimbus Freight platform team. A penetration test flagged that the customer portal sends unprotected responses and leaks internal build metadata. The deployment tooling opens a small authenticated admin API so you can apply a reviewed header policy without redeploying. Your job: hunt the leak, harden the edge, and record evidence.",
+  "prerequisites": [
+    "Basic shell navigation",
+    "Comfort reading raw HTTP with curl"
+  ],
+  "learningObjectives": [
+    "Inspect real HTTP responses and identify missing browser security headers",
+    "Explain the risk of clickjacking, MIME sniffing and insecure transport policy",
+    "Apply a validated Content-Security-Policy, HSTS and related headers through an admin API",
+    "Verify remediation against the live service and document evidence"
+  ],
+  "authorizedScope": "Only the Nimbus Freight portal running inside this lab session (CF_TARGET_URL, 127.0.0.1 inside the workspace). No other hosts are in scope and outbound network access is denied by the session policy.",
+  "riskSummary": "Missing browser security headers allow clickjacking, MIME-confusion attacks and downgrade/credential-leak scenarios. A leaked build token can enable artifact tampering if the build system trusts it.",
+  "remediation": "Apply a CSP with frame-ancestors 'none', enforce HSTS with a one-year max-age on all responses, set X-Content-Type-Options: nosniff, a strict Referrer-Policy, and a restrictive Permissions-Policy. Remove build metadata from production response headers and keep tokens out of transport headers.",
+  "conclusion": "You audited a live application, found a real leaked build token, and remediated the missing security headers by driving a validated admin API. This is the same workflow used to roll out edge policies safely in production.",
+  "baseXp": 100,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "git",
+      "labctl",
+      "grep"
+    ]
+  },
+  "images": [
+    {
+      "ref": "cipherforge/target-app:1.2.0",
+      "digestPolicy": "pinned-tag",
+      "services": [
+        "target"
+      ]
+    },
+    {
+      "ref": "cipherforge/workspace:1.2.0",
+      "digestPolicy": "pinned-tag",
+      "services": [
+        "workspace"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "portal",
+      "role": "target",
+      "app": "http-header-hunt/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/",
+        "expectStatus": 200,
+        "expectBody": "Nimbus Freight",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "build-token"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "build-token",
+      "title": "Find the leaked build token",
+      "description": "Authenticate to the portal with the demo account from your briefing, then inspect an authenticated response. A build token is leaking in a response header. Submit it as a flag (format CF{...}).",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 30
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Start with the briefing: the demo credentials are in ~/credentials.txt. Log in with curl and keep the session cookie.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "Use `curl -sD - -b cookies.txt http://127.0.0.1:8080/dashboard -o /dev/null` to read the full response headers.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "harden-headers",
+      "title": "Apply a hardened header policy",
+      "description": "Use labctl to apply a policy JSON that adds the required security headers to every response. The platform verifies the live responses, not your intent.",
+      "evidencePrompt": "The platform will fetch /, /login and /dashboard and validate CSP, HSTS, nosniff, Referrer-Policy, Permissions-Policy and frame protection.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 70,
+        "validator": "headers-hardened",
+        "criteria": "All three pages return CSP (frame-ancestors 'none', no unsafe script sources), HSTS max-age >= 15552000, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy and X-Frame-Options: DENY"
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`labctl audit` reports how the live service scores against the required header set.",
+          "xpPenalty": 10
+        },
+        {
+          "id": "h2",
+          "text": "Policy shape: {\"headers\":{\"Content-Security-Policy\":\"default-src 'none'; frame-ancestors 'none'; ...\"}}. Start from `labctl policy show`.",
+          "xpPenalty": 15
+        },
+        {
+          "id": "h3",
+          "text": "Apply with `labctl policy apply hardened.json`, then re-check with `curl -sI http://127.0.0.1:8080/`.",
+          "xpPenalty": 15
+        }
+      ]
+    },
+    {
+      "id": "evidence-report",
+      "title": "Document the finding and fix",
+      "description": "Write ~/evidence/headers-findings.json with the missing headers you observed and the headers you applied. The validator compares your evidence against the live service.",
+      "evidencePrompt": "Required shape: {\"missingBefore\": [\"...\"], \"applied\": {\"Header-Name\": \"value\"}, \"notes\": \"...\"}",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 20,
+        "validator": "headers-evidence",
+        "criteria": "Evidence file exists, lists at least four previously missing headers, and the applied values match live responses"
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Create it with jq or python3: `python3 - <<'PY'` ... `PY` \u2014 then run the objective check.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "walkthrough": [
+    {
+      "title": "Read the briefing",
+      "body": "The briefing lists the portal URL, the demo account and the admin tool available in this workspace.",
+      "snippet": "cat ~/README.md ~/credentials.txt"
+    },
+    {
+      "title": "Inspect the current headers",
+      "body": "Unauthenticated responses are missing every browser security control.",
+      "snippet": "curl -sD - http://127.0.0.1:8080/ -o /dev/null"
+    },
+    {
+      "title": "Log in and find the leaked token",
+      "body": "The authenticated dashboard leaks build metadata in a response header.",
+      "snippet": "curl -s -c cookies.txt -d 'email=ops@nimbusfreight.example&password=freight2024' http://127.0.0.1:8080/login -o /dev/null && curl -sD - -b cookies.txt http://127.0.0.1:8080/dashboard -o /dev/null"
+    },
+    {
+      "title": "Submit the flag",
+      "body": "Copy the CF{...} value from the X-Build-Token header into the objective panel."
+    },
+    {
+      "title": "Draft the hardened policy",
+      "body": "Start from the active policy and add the six required headers.",
+      "snippet": "labctl policy show > policy.json"
+    },
+    {
+      "title": "Apply and verify",
+      "body": "Apply the policy through the authenticated admin API, then re-fetch the pages. The target applies it in-memory immediately.",
+      "snippet": "labctl policy apply hardened.json && curl -sD - http://127.0.0.1:8080/ -o /dev/null"
+    },
+    {
+      "title": "Write evidence",
+      "body": "Record which headers were missing and the exact values you applied, then run the evidence objective.",
+      "snippet": "cat > ~/evidence/headers-findings.json <<'JSON'\n{\"missingBefore\":[\"Content-Security-Policy\",\"Strict-Transport-Security\",\"X-Content-Type-Options\",\"Referrer-Policy\",\"Permissions-Policy\",\"X-Frame-Options\"],\"applied\":{},\"notes\":\"Remediated portal edge headers.\"}\nJSON"
+    }
+  ],
+  "validators": [
+    "headers-hardened",
+    "headers-evidence"
+  ],
+  "provisioner": {
+    "script": "http-header-hunt/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "tests": [
+    {
+      "id": "health",
+      "description": "Portal responds on the private network",
+      "type": "health"
+    },
+    {
+      "id": "flag-leak",
+      "description": "Build token is only exposed on an authenticated response",
+      "type": "validator"
+    },
+    {
+      "id": "teardown",
+      "description": "Target process and session mounts are removed on stop",
+      "type": "teardown"
+    }
+  ]
+}

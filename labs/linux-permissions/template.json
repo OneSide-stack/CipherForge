@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "id": "linux-permissions",
+  "version": "1.0.0",
+  "status": "published",
+  "workspaceOnly": true,
+  "title": "Permission Drift",
+  "subtitle": "Harden a Linux workspace that drifted away from least privilege",
+  "category": "Linux Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 20,
+  "skills": [
+    "File permissions",
+    "chmod",
+    "SSH hygiene",
+    "Least privilege",
+    "Auditing"
+  ],
+  "summary": "A reporting workstation accumulated unsafe file modes: a world-writable SSH directory, a readable private key and a world-writable report. Fix the actual files and document the audit.",
+  "scenario": "Northwind Freight provisions this workspace for a reporting contractor. A pre-handover check found file modes that would let any local process read or alter secrets. Your job is to correct the real filesystem permissions and produce a short audit record.",
+  "prerequisites": [
+    "Basic Linux commands",
+    "Understanding of Unix permission bits"
+  ],
+  "learningObjectives": [
+    "Audit file modes with stat and find",
+    "Apply owner-only permissions to sensitive files",
+    "Document permission findings and their risk"
+  ],
+  "authorizedScope": "Only this training workspace. The key material is synthetic and unusable outside the session.",
+  "riskSummary": "Over-permissive modes allow credential theft and tampering by other local users or compromised processes. World-writable files also undermine audit integrity.",
+  "remediation": "Use 0700 for ~/.ssh and 0600 for private keys and credential files, remove world-writable bits, and enforce configuration through provisioning rather than manual fixes.",
+  "conclusion": "You restored least privilege across the workspace, including SSH material and a live credential file, and documented the drift so provisioning can be corrected.",
+  "baseXp": 80,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "stat",
+      "chmod",
+      "find",
+      "chown",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "ssh-perms",
+      "title": "Lock down SSH and credentials",
+      "description": "Set ~/.ssh to 0700, the private key to 0600 and ~/.config/portal/credentials to 0600. The live check inspects the actual modes.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 40,
+        "validator": "ssh-hardening",
+        "criteria": [
+          "~/.ssh is 700",
+          "private key is 600",
+          "portal credentials are 600"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`chmod 700 ~/.ssh; chmod 600 ~/.ssh/id_ed25519 ~/.config/portal/credentials`.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "writable-audit",
+      "title": "Eliminate world-writable files and document the audit",
+      "description": "Remove world-writable permissions from the report file (and any other offending entry), then write evidence/permissions.json listing at least three issues and their corrected modes.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 50,
+        "validator": "writable-audit",
+        "criteria": [
+          "no world-writable files remain",
+          "audit lists at least three issues",
+          "notes explain the risk"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`find ~ -perm -0002 -type f` finds world-writable files. `chmod o-w <file>` fixes one.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "ssh-hardening",
+    "writable-audit"
+  ],
+  "provisioner": {
+    "script": "linux-permissions/provision.mjs",
+    "timeoutSeconds": 30
+  },
+  "walkthrough": [
+    {
+      "title": "Inventory the modes",
+      "body": "List the sensitive paths and their current modes.",
+      "snippet": "stat -c '%a %n' ~/.ssh ~/.ssh/id_ed25519 ~/.config/portal/credentials ~/work/report.txt"
+    },
+    {
+      "title": "Fix the modes",
+      "body": "Apply owner-only permissions and remove the world-writable bit.",
+      "snippet": "chmod 700 ~/.ssh; chmod 600 ~/.ssh/id_ed25519 ~/.config/portal/credentials; chmod o-w ~/work/report.txt"
+    },
+    {
+      "title": "Document the audit",
+      "body": "Record at least three issues with before/after modes, then run both objective checks.",
+      "snippet": "jq -n '{issues:[{path:\"~/.ssh\",before:\"0777\",after:\"0700\"},{path:\"~/.ssh/id_ed25519\",before:\"0644\",after:\"0600\"},{path:\"~/.config/portal/credentials\",before:\"0644\",after:\"0600\"}],notes:\"Provisioning drift exposed key material and allowed tampering\"}' > ~/evidence/permissions.json"
+    }
+  ]
+}

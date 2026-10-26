@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud-bucket-exposure",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Open Bucket, Closed Door",
+  "subtitle": "Find Vela Retail's anonymous backup bucket and lock it down",
+  "category": "Cloud Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 22,
+  "skills": [
+    "Object storage ACLs",
+    "Cloud misconfiguration",
+    "curl",
+    "Least privilege"
+  ],
+  "summary": "Vela Retail's backup bucket inherited a public ACL. Browse it anonymously, capture the internal marker from a database snapshot, then require an access key for backups without breaking the public CDN.",
+  "scenario": "A routine cloud review at Vela Retail checks whether storage buckets match their intended exposure. The CDN bucket is meant to be public; the nightly database exports are not. Find what is world-readable, prove the exposure, and apply the correct ACL policy.",
+  "prerequisites": [
+    "Basic familiarity with object storage concepts",
+    "curl"
+  ],
+  "learningObjectives": [
+    "Identify anonymously readable cloud storage",
+    "Assess the impact of exposed backups",
+    "Apply bucket-level access control and verify both denial and allowed access"
+  ],
+  "authorizedScope": "Only the Vela Retail training storage service in this session. All objects are synthetic.",
+  "riskSummary": "Publicly readable backups leak customer records, credentials and internal markers. Attackers routinely scan for predictable bucket names.",
+  "remediation": "Default buckets to private, require authenticated access for exports, scope credentials per bucket, and monitor anonymous read attempts.",
+  "conclusion": "You proved that a backup bucket was anonymously readable and remediated it by requiring an access key, while keeping the intended public CDN working.",
+  "baseXp": 120,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl"
+    ]
+  },
+  "services": [
+    {
+      "name": "storage",
+      "role": "target",
+      "app": "cloud-bucket-exposure/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/",
+        "expectStatus": 200,
+        "expectBody": "Vela object storage",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "backup-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 300,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "backup-flag",
+      "title": "Read an exposed backup",
+      "description": "Enumerate the storage buckets from the console, then read a database snapshot anonymously and submit the internal marker it contains.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 45
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "List bucket contents with `curl -s $CF_TARGET_URL/storage/vela-backups | jq`. Then fetch an object path directly.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "lock-backups",
+      "title": "Require an access key for backups",
+      "description": "Apply the ACL policy so backups reject anonymous reads. The live check verifies anonymous denial, authorized access with the demo key, and that the public bucket still serves objects.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 70,
+        "validator": "backup-private",
+        "criteria": [
+          "anonymous list returns 403",
+          "anonymous object read returns 403",
+          "demo key returns 200",
+          "public bucket still returns 200"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"requireAuthForBackups\": true}` with labctl, then read the bucket again with `-H 'x-vela-key: vela-demo-key-2024'`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "backup-private"
+  ],
+  "provisioner": {
+    "script": "cloud-bucket-exposure/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Enumerate buckets",
+      "body": "The console lists bucket names and visibility. Backups should never be public.",
+      "snippet": "curl -s $CF_TARGET_URL/storage/vela-backups | jq"
+    },
+    {
+      "title": "Read the snapshot",
+      "body": "Object names are listed in the bucket index. Fetch the snapshot directly.",
+      "snippet": "curl -s $CF_TARGET_URL/storage/vela-backups/db-snapshot-2026-10-24.txt"
+    },
+    {
+      "title": "Apply the ACL",
+      "body": "Require an access key for backups, then confirm anonymous access is denied while the demo key still works.",
+      "snippet": "echo '{\"requireAuthForBackups\": true}' | labctl policy apply -"
+    }
+  ]
+}

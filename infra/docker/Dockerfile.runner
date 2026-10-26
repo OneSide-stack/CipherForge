@@ -1,0 +1,26 @@
+# Lab runner image. Runs on a dedicated worker; this is the only service that may see the
+# Docker socket (see docker-compose.yml).
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npm ci --no-audit --no-fund \
+ && npm run build -w @cipherforge/shared \
+ && npm run build -w @cipherforge/runner
+
+FROM node:22-bookworm-slim AS runtime
+ENV NODE_ENV=production
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/runner ./apps/runner
+COPY --from=build /app/packages/shared ./packages/shared
+COPY --from=build /app/labs ./labs
+COPY --from=build /app/runner-assets ./runner-assets
+COPY --from=build /app/scripts ./scripts
+EXPOSE 7100
+CMD ["node", "apps/runner/dist/index.js"]

@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "id": "idor-invoice-hunt",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Invoice Access Hunt",
+  "subtitle": "Find and fix an IDOR in Lumen Health's billing API",
+  "category": "API Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 25,
+  "skills": [
+    "IDOR",
+    "Broken object level authorization",
+    "curl",
+    "HTTP sessions",
+    "Defensive policy"
+  ],
+  "summary": "Lumen Health's billing API authenticates callers but never checks which patient an invoice belongs to. Read a record you should not see, then close the gap through the authenticated admin API.",
+  "scenario": "You are reviewing a patient billing portal for Lumen Health. The API is protected by a login, but the security team suspects object-level authorization was never implemented. Find an invoice belonging to another patient, capture the evidence marker, then remediate the endpoint and prove it with a live check.",
+  "prerequisites": [
+    "Comfort with curl",
+    "Understanding of session cookies",
+    "Basic HTTP status codes"
+  ],
+  "learningObjectives": [
+    "Recognise broken object level authorization (IDOR) in a real API",
+    "Use an authenticated session to enumerate object identifiers",
+    "Apply and verify an ownership check through a deployment API",
+    "Explain why authentication alone is not authorization"
+  ],
+  "authorizedScope": "Only the Lumen Health training portal inside this session. All patients, invoices and payments are fictional.",
+  "riskSummary": "An IDOR in billing exposes protected health and payment records across tenants. Attackers enumerate sequential identifiers and exfiltrate records without ever breaking authentication.",
+  "remediation": "Enforce object ownership on every record fetch, return 403 (not 404 with data) for foreign objects, and log authorization denials with the caller and object id.",
+  "conclusion": "You demonstrated a cross-tenant data exposure using nothing but an authenticated session, then remediated it by turning on enforced ownership in the portal policy and proving the denial with a live validator.",
+  "baseXp": 120,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl",
+      "grep"
+    ]
+  },
+  "services": [
+    {
+      "name": "portal",
+      "role": "target",
+      "app": "idor-invoice-hunt/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/",
+        "expectStatus": 200,
+        "expectBody": "Lumen Health",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "invoice-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "invoice-flag",
+      "title": "Read another patient's invoice",
+      "description": "Sign in with the demo account, inspect your own invoice API responses, then request a neighbouring invoice identifier that belongs to a different patient. The memo of that invoice contains the flag.",
+      "evidencePrompt": "Submit the flag from the foreign invoice memo.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 40
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Log in with curl and keep the cookie: `curl -si -c cookies.txt -d 'email=analyst%40lumenhealth.example&password=lumen2024' $CF_TARGET_URL/login`.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "Your invoices are INV-1041 and INV-1042. The API responds at /api/invoices/<id>; try ids around the range you see.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "fix-ownership",
+      "title": "Enforce ownership on the invoice API",
+      "description": "Use the authenticated admin API to enable ownership checks, then run the live check. It signs in as the demo patient and confirms a foreign invoice is rejected while their own invoice still loads.",
+      "evidencePrompt": "Run the live check after changing the policy.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 60,
+        "validator": "ownership-enforced",
+        "criteria": [
+          "foreign invoice returns 403",
+          "own invoice still returns 200"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Read the current policy with `labctl policy get`, then apply `{\"enforceOwnership\": true}` with `labctl policy apply`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "ownership-enforced"
+  ],
+  "provisioner": {
+    "script": "idor-invoice-hunt/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Sign in and keep the session",
+      "body": "The portal sets an HttpOnly cookie. Save it with curl so the API trusts you.",
+      "snippet": "curl -si -c cookies.txt -d 'email=analyst%40lumenhealth.example&password=lumen2024' $CF_TARGET_URL/login"
+    },
+    {
+      "title": "Enumerate the invoice API",
+      "body": "Your list shows the identifiers you own. Request a neighbouring identifier and read the JSON memo.",
+      "snippet": "for id in 1098 1099 1100; do curl -s -b cookies.txt \"$CF_TARGET_URL/api/invoices/INV-$id\"; echo; done"
+    },
+    {
+      "title": "Apply the ownership policy",
+      "body": "The admin API accepts a single switch. Applying it makes the API compare the invoice owner to your session.",
+      "snippet": "echo '{\"enforceOwnership\": true}' | labctl policy apply -"
+    },
+    {
+      "title": "Verify the fix",
+      "body": "Re-request the foreign invoice: it must now return 403, while your own invoice still returns 200. Then run the objective's live check.",
+      "snippet": "curl -s -o /dev/null -w '%{http_code}\\n' -b cookies.txt \"$CF_TARGET_URL/api/invoices/INV-1099\""
+    }
+  ]
+}

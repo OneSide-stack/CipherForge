@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import { report } from '../../_shared/validator.mjs';
+const HOME = '/home/learner';
+const issues = [];
+const mode = (p) => (fs.existsSync(p) ? (fs.statSync(p).mode & 0o777).toString(8).padStart(3, '0') : null);
+const sshDir = mode(`${HOME}/.ssh`);
+const key = mode(`${HOME}/.ssh/id_ed25519`);
+const creds = mode(`${HOME}/.config/portal/credentials`);
+if (sshDir !== '700') issues.push(`~/.ssh should be 700 (is ${sshDir ?? 'missing'})`);
+if (key !== '600') issues.push(`~/.ssh/id_ed25519 should be 600 (is ${key ?? 'missing'})`);
+if (creds !== '600') issues.push(`~/.config/portal/credentials should be 600 (is ${creds ?? 'missing'})`);
+report(issues.length === 0, issues.length === 0 ? 'SSH directory, private key and portal credentials use owner-only permissions.' : 'Sensitive files are still over-permissive.', { issues, modes: { sshDir, key, creds } });

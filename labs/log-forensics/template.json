@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "id": "log-forensics",
+  "version": "1.0.0",
+  "status": "published",
+  "workspaceOnly": true,
+  "title": "Night Shift Triage",
+  "subtitle": "Reconstruct an overnight intrusion from JSON access logs",
+  "category": "Log Analysis",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 25,
+  "skills": [
+    "Log analysis",
+    "jq",
+    "grep",
+    "Incident documentation",
+    "Timeline reconstruction"
+  ],
+  "summary": "A billing portal was accessed overnight by an unfamiliar client. Work from the raw JSON access log: identify the hostile session, recover the exfiltration marker, and write an incident record a responder could action.",
+  "scenario": "You are on call for Corvus Insurance. The overnight alert shows failed logins followed by an administrative export. The application log is the only evidence available, and it lives in your workspace. Build the timeline, capture the marker that ended up in a request path, and file a short incident report.",
+  "prerequisites": [
+    "Basic command line",
+    "Familiarity with grep or jq"
+  ],
+  "learningObjectives": [
+    "Pivot through raw application logs to isolate a suspicious session",
+    "Separate scanner noise from real exfiltration",
+    "Produce a machine-readable incident record"
+  ],
+  "authorizedScope": "Only the synthetic log artifact in this workspace. All addresses use documentation ranges.",
+  "riskSummary": "Without log triage, an exfiltration that used a valid account can go unnoticed until customer impact. Attackers blend into normal traffic and rely on slow investigations.",
+  "remediation": "Alert on scanner user agents and repeated 401s, require step-up authentication for bulk exports, and centralise immutable logs with retention beyond the incident window.",
+  "conclusion": "You isolated the hostile session from scanner noise, recovered the exfiltration marker from the request path, and wrote an incident record that names the actor address and abused endpoint.",
+  "baseXp": 90,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "grep",
+      "jq",
+      "python3",
+      "less",
+      "cat"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "exfil-marker",
+      "title": "Capture the exfiltration marker",
+      "description": "Find the request that carried the marker out of the portal and submit it. The marker is a CF{...} token embedded in a request path.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 35
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Search the log for CF{ \u2014 `grep -o 'CF{[^}]*}' ~/artifacts/access.log`.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "incident-report",
+      "title": "File the incident record",
+      "description": "Complete evidence/incident.json with the attacker address, the abused endpoint and the marker, plus notes describing the timeline.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "incident-report",
+        "criteria": [
+          "attackerIp matches the hostile session",
+          "endpoint is the abused admin route",
+          "marker matches the log",
+          "notes explain the timeline"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Filter by the sqlmap user agent to find the actor, then follow their later requests.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "incident-report"
+  ],
+  "provisioner": {
+    "script": "log-forensics/provision.mjs",
+    "timeoutSeconds": 30
+  },
+  "walkthrough": [
+    {
+      "title": "Scan for scanners",
+      "body": "The hostile session advertises a scanner user agent. Find those rows and note the source address.",
+      "snippet": "jq -r 'select(.user_agent|test(\"sqlmap\"))' ~/artifacts/access.log"
+    },
+    {
+      "title": "Follow the actor",
+      "body": "With the address known, list all of their requests in time order.",
+      "snippet": "jq -r 'select(.ip==\"203.0.113.77\") | \"\\(.ts) \\(.method) \\(.path) \\(.status)\"' ~/artifacts/access.log"
+    },
+    {
+      "title": "Write the report",
+      "body": "Fill in incident.json and run the objective check.",
+      "snippet": "jq -n --arg ip 203.0.113.77 --arg ep /api/admin/export --arg m 'CF{...}' '{attackerIp:$ip,endpoint:$ep,marker:$m,notes:\"Scanner noise followed by a valid-account export\"}' > ~/evidence/incident.json"
+    }
+  ]
+}

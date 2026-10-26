@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "race-condition-coupon",
+  "version": "0.1.0",
+  "status": "coming_soon",
+  "comingSoon": true,
+  "title": "Double Dip",
+  "subtitle": "Exploit a non-atomic coupon redemption",
+  "category": "API Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 35,
+  "baseXp": 150,
+  "skills": [
+    "Race conditions",
+    "Transactions",
+    "API testing"
+  ],
+  "summary": "Planned lab: win a concurrency race to redeem a single-use coupon more than once, then make the redemption atomic.",
+  "scenario": "A checkout API marks coupons as used after validation. Fire simultaneous requests to redeem one twice and repair the transaction.",
+  "availabilityNote": "Planned \u2014 needs a deterministic concurrency harness before it can be fair to learners.",
+  "prerequisites": [
+    "Prior labs in the same category recommended"
+  ],
+  "learningObjectives": [
+    "Practise Race conditions in a contained session",
+    "Practise Transactions in a contained session",
+    "Practise API testing in a contained session"
+  ],
+  "authorizedScope": "Not yet runnable. This entry is catalogued so learners can plan; no session can be started.",
+  "riskSummary": "This entry is a roadmap item; the risk description will be finalised with the lab.",
+  "remediation": "Use atomic compare-and-set updates or database constraints so redemption cannot interleave.",
+  "conclusion": "Planned lab \u2014 not yet available.",
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "briefing",
+      "title": "Read the briefing",
+      "description": "Placeholder objective used only for catalog metadata; the entry cannot be launched.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 0,
+        "validator": "not-run",
+        "criteria": [
+          "not runnable"
+        ]
+      },
+      "hints": []
+    }
+  ],
+  "validators": [],
+  "provisioner": {
+    "script": "none",
+    "timeoutSeconds": 10
+  },
+  "walkthrough": []
+}

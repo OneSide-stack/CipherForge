@@ -1,0 +1,35 @@
+{
+  "name": "@cipherforge/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --enable-source-maps dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "node dist/db/migrate.js",
+    "seed": "node dist/db/seed.js",
+    "test": "npm run build:test && node --test --test-concurrency=1 \"dist-test/test/*.test.js\"",
+    "build:test": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "compression": "^1.7.5",
+    "cookie-parser": "^1.4.7",
+    "dockerode": "^4.0.2",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "pg": "^8.13.1",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.7.5",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^4.17.21",
+    "@types/pg": "^8.11.10",
+    "@types/ws": "^8.5.13",
+    "node-pty": "^1.0.0"
+  }
+}

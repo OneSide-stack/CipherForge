@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "nginx-request-smuggling",
+  "version": "0.1.0",
+  "status": "coming_soon",
+  "comingSoon": true,
+  "title": "Smuggled Intent",
+  "subtitle": "Exploit request smuggling between proxies",
+  "category": "Web Security",
+  "difficulty": "Advanced",
+  "estimatedMinutes": 50,
+  "baseXp": 180,
+  "skills": [
+    "HTTP smuggling",
+    "Proxy chains",
+    "Framing"
+  ],
+  "summary": "Planned lab: a front proxy and a backend disagree about request framing, letting a request slip past authorisation.",
+  "scenario": "Two hop chain with differing Content-Length handling. Smuggle a request to reach an internal admin route.",
+  "availabilityNote": "Planned \u2014 requires a two-proxy Docker topology and careful timing checks.",
+  "prerequisites": [
+    "Prior labs in the same category recommended"
+  ],
+  "learningObjectives": [
+    "Practise HTTP smuggling in a contained session",
+    "Practise Proxy chains in a contained session",
+    "Practise Framing in a contained session"
+  ],
+  "authorizedScope": "Not yet runnable. This entry is catalogued so learners can plan; no session can be started.",
+  "riskSummary": "This entry is a roadmap item; the risk description will be finalised with the lab.",
+  "remediation": "Normalise framing at the edge, reject ambiguous requests, and keep proxies patched and aligned.",
+  "conclusion": "Planned lab \u2014 not yet available.",
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "briefing",
+      "title": "Read the briefing",
+      "description": "Placeholder objective used only for catalog metadata; the entry cannot be launched.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 0,
+        "validator": "not-run",
+        "criteria": [
+          "not runnable"
+        ]
+      },
+      "hints": []
+    }
+  ],
+  "validators": [],
+  "provisioner": {
+    "script": "none",
+    "timeoutSeconds": 10
+  },
+  "walkthrough": []
+}

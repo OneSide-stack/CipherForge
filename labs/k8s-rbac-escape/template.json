@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "id": "k8s-rbac-escape",
+  "version": "0.1.0",
+  "status": "coming_soon",
+  "comingSoon": true,
+  "title": "Namespace Neighbour",
+  "subtitle": "Break out of a pod service account in Kubernetes",
+  "category": "Container Security",
+  "difficulty": "Advanced",
+  "estimatedMinutes": 60,
+  "baseXp": 200,
+  "skills": [
+    "RBAC",
+    "Service accounts",
+    "Secrets",
+    "Least privilege"
+  ],
+  "summary": "Planned lab: start from a low-privilege service account and escalate through over-permissive RBAC bindings to read a protected secret.",
+  "scenario": "A cluster namespace grants list/watch on secrets to a builder account. Find the binding, use it, then tighten the role.",
+  "availabilityNote": "Planned \u2014 requires a Kubernetes API server and cluster networking. Not available in this deployment.",
+  "prerequisites": [
+    "Prior labs in the same category recommended"
+  ],
+  "learningObjectives": [
+    "Practise RBAC in a contained session",
+    "Practise Service accounts in a contained session",
+    "Practise Secrets in a contained session",
+    "Practise Least privilege in a contained session"
+  ],
+  "authorizedScope": "Not yet runnable. This entry is catalogued so learners can plan; no session can be started.",
+  "riskSummary": "This entry is a roadmap item; the risk description will be finalised with the lab.",
+  "remediation": "Scope roles to resource names, avoid wildcard verbs, and require workload identity over long-lived tokens.",
+  "conclusion": "Planned lab \u2014 not yet available.",
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "briefing",
+      "title": "Read the briefing",
+      "description": "Placeholder objective used only for catalog metadata; the entry cannot be launched.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 0,
+        "validator": "not-run",
+        "criteria": [
+          "not runnable"
+        ]
+      },
+      "hints": []
+    }
+  ],
+  "validators": [],
+  "provisioner": {
+    "script": "none",
+    "timeoutSeconds": 10
+  },
+  "walkthrough": []
+}

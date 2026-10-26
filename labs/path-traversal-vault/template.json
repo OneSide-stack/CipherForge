@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "id": "path-traversal-vault",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Atlas Vault Traversal",
+  "subtitle": "Escape the document library and then seal it",
+  "category": "Web Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 22,
+  "skills": [
+    "Path traversal",
+    "File handling",
+    "HTTP requests",
+    "Input validation",
+    "Defensive configuration"
+  ],
+  "summary": "Atlas Logistics serves partner documents through a download endpoint that trusts the requested file name. Walk out of the public folder to reach an internal document, then apply the containment policy and verify it.",
+  "scenario": "Atlas Logistics publishes partner paperwork through a small Node service. The endpoint was written quickly: it joins user input onto a public directory and normalises the result. Your job is to demonstrate the traversal, capture the internal marker, and then block the class of attack.",
+  "prerequisites": [
+    "Comfort with URLs and URL-encoding",
+    "Basic curl usage"
+  ],
+  "learningObjectives": [
+    "Exploit path traversal in a real download handler",
+    "Explain how normalisation after concatenation enables escape",
+    "Apply a containment check and verify it blocks payloads without breaking downloads"
+  ],
+  "authorizedScope": "Only the Atlas Logistics training service inside this session. All documents are synthetic.",
+  "riskSummary": "Path traversal lets an attacker read files outside an intended directory, including configuration, credentials and internal documents.",
+  "remediation": "Resolve the requested file against an allowed base directory, reject traversal segments early, canonicalise, then verify the final path still starts with the base directory before reading.",
+  "conclusion": "You escaped a public directory using a normalised relative path, captured the internal marker, and then blocked the attack at the edge while keeping legitimate downloads working.",
+  "baseXp": 110,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "labctl",
+      "jq"
+    ]
+  },
+  "services": [
+    {
+      "name": "docs",
+      "role": "target",
+      "app": "path-traversal-vault/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/",
+        "expectStatus": 200,
+        "expectBody": "Atlas Logistics",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "vault-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 300,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "vault-flag",
+      "title": "Read the internal document",
+      "description": "The public library only lists three files, but the service resolves paths relative to a public directory. Read an internal document and submit the marker it contains.",
+      "evidencePrompt": "Submit the CF{...} marker from the internal document.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 40
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "The handler builds `public/<file>` and normalises the result. Try `file=../internal/flag.txt` (URL-encode the dots if your shell mangles them).",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "block-traversal",
+      "title": "Block traversal at the service",
+      "description": "Enable the containment policy through the authenticated admin API. The live check sends a traversal payload and confirms it is rejected while a normal download still works.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "traversal-blocked",
+        "criteria": [
+          "traversal payload returns 400",
+          "public document returns 200"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"blockTraversal\": true}` with `labctl policy apply` and re-test both requests.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "traversal-blocked"
+  ],
+  "provisioner": {
+    "script": "path-traversal-vault/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Download a normal document",
+      "body": "Confirm the endpoint works with a legitimate file name.",
+      "snippet": "curl -s \"$CF_TARGET_URL/docs?file=readme.txt\""
+    },
+    {
+      "title": "Traverse out of the public directory",
+      "body": "The handler normalises `public/../internal/flag.txt` to `internal/flag.txt`. Read it.",
+      "snippet": "curl -s \"$CF_TARGET_URL/docs?file=../internal/flag.txt\""
+    },
+    {
+      "title": "Block the attack",
+      "body": "Apply the policy, then re-run the traversal: it should return invalid_path while normal downloads continue.",
+      "snippet": "echo '{\"blockTraversal\": true}' | labctl policy apply -"
+    }
+  ]
+}

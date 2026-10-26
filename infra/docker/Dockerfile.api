@@ -1,0 +1,23 @@
+# API + web build image. The API image deliberately does NOT include Docker tooling.
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npm ci --no-audit --no-fund \
+ && npm run build -w @cipherforge/shared \
+ && npm run build -w @cipherforge/api \
+ && npm run build -w @cipherforge/web
+
+FROM node:22-bookworm-slim AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/shared ./packages/shared
+COPY --from=build /app/apps/api ./apps/api
+COPY --from=build /app/apps/web/dist ./apps/web/dist
+COPY --from=build /app/labs ./labs
+USER node
+EXPOSE 5000
+CMD ["node", "apps/api/dist/index.js"]

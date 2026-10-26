@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "id": "pcap-dns-exfil",
+  "version": "1.0.0",
+  "status": "published",
+  "workspaceOnly": true,
+  "title": "Whispering DNS",
+  "subtitle": "Decode data exfiltration hidden in DNS queries",
+  "category": "Network Analysis",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 28,
+  "skills": [
+    "pcap analysis",
+    "DNS",
+    "Hex decoding",
+    "Egress monitoring"
+  ],
+  "summary": "An egress sensor captured a short DNS session. Most lookups are ordinary, but three queries carry hex-encoded payloads. Extract them, decode the token and document the exfiltration.",
+  "scenario": "Vela Retail's egress filter allows DNS out of the datacenter. A sensor capture from the same window shows a workstation talking to an unfamiliar subdomain. Reconstruct what left the network and produce an evidence record.",
+  "prerequisites": [
+    "Hex and base64 fundamentals",
+    "Familiarity with grep or a pcap tool"
+  ],
+  "learningObjectives": [
+    "Inspect real pcap bytes without a GUI",
+    "Spot high-entropy DNS labels",
+    "Reassemble split encoded payloads in order",
+    "Describe DNS tunnelling controls"
+  ],
+  "authorizedScope": "Only the synthetic capture in this workspace. Addresses and domains are fictional.",
+  "riskSummary": "DNS tunnelling survives many egress controls because DNS is almost always permitted. Data can leave in label chunks that look like noise to naive filters.",
+  "remediation": "Send DNS through a logging resolver, alert on long or high-entropy labels, enforce allow-listed resolvers, and block recursive lookups for uncategorised domains.",
+  "conclusion": "You separated benign lookups from three encoded queries, reassembled and hex-decoded them into the exfiltration token, and documented the tunnel.",
+  "baseXp": 110,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "grep",
+      "python3",
+      "base64",
+      "jq",
+      "sed"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "exfil-token",
+      "title": "Decode the DNS exfiltration",
+      "description": "Pull the hex labels that were queried under exfil.vela-retail.example, concatenate them in capture order and hex-decode the result to recover the token.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 50
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`strings ~/artifacts/capture.pcap | grep exfil` shows the query names; the sublabels are hex, not words.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "Both hex chunks arrive in one query as two sub-labels. Join them and decode: `python3 -c \"import sys;print(bytes.fromhex('hexhere'))\"`.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "dns-exfil-report",
+      "title": "Document the tunnel",
+      "description": "Complete evidence/dns-exfil.json with the exfil domain, the encoded labels and the decoded token, plus notes on how the data left.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "dns-exfil-report",
+        "criteria": [
+          "exfil domain recorded",
+          "encoded labels listed",
+          "decoded token matches",
+          "notes explain the egress path"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Order matters: use the labels as they appear in the capture.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "dns-exfil-report"
+  ],
+  "provisioner": {
+    "script": "pcap-dns-exfil/provision.mjs",
+    "timeoutSeconds": 30
+  },
+  "walkthrough": [
+    {
+      "title": "Find the queries",
+      "body": "Read the capture as bytes and look for the exfiltration domain.",
+      "snippet": "strings ~/artifacts/capture.pcap | grep -E 'exfil|vela-retail'"
+    },
+    {
+      "title": "Decode the labels",
+      "body": "Concatenate the two hex sub-labels of the suspicious query, then hex-decode them.",
+      "snippet": "python3 ~/tools/dnsq.py ~/artifacts/capture.pcap | grep exfil | cut -d. -f1,2 | tr -d \".\" | python3 -c \"import sys;print(bytes.fromhex(sys.stdin.read().strip()).decode())\""
+    },
+    {
+      "title": "Write the evidence",
+      "body": "Store the domain, labels and token, then run the objective check.",
+      "snippet": "jq -n '{exfilDomain:\"exfil.vela-retail.example\",encodedLabels:[\"...\"],decodedFlag:\"CF{...}\",notes:\"Hex chunks split across DNS labels under an allow-listed resolver\"}' > ~/evidence/dns-exfil.json"
+    }
+  ]
+}

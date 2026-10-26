@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "s3-policy-privesc",
+  "version": "0.1.0",
+  "status": "coming_soon",
+  "comingSoon": true,
+  "title": "Bucket Politics",
+  "subtitle": "Pivot through an over-permissive storage policy",
+  "category": "Cloud Security",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 40,
+  "baseXp": 160,
+  "skills": [
+    "IAM",
+    "Bucket policies",
+    "Cloud abuse"
+  ],
+  "summary": "Planned lab: a workload role can rewrite its own bucket policy and read a protected export.",
+  "scenario": "An analytics worker role can call PutBucketPolicy on its own bucket. Escalate, read the export, then fix the IAM boundary.",
+  "availabilityNote": "Planned \u2014 simulated with a local object-storage control plane; the Docker variant is not yet published.",
+  "prerequisites": [
+    "Prior labs in the same category recommended"
+  ],
+  "learningObjectives": [
+    "Practise IAM in a contained session",
+    "Practise Bucket policies in a contained session",
+    "Practise Cloud abuse in a contained session"
+  ],
+  "authorizedScope": "Not yet runnable. This entry is catalogued so learners can plan; no session can be started.",
+  "riskSummary": "This entry is a roadmap item; the risk description will be finalised with the lab.",
+  "remediation": "Never grant policy-write to workload identities; pin resource scopes and review role trust.",
+  "conclusion": "Planned lab \u2014 not yet available.",
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "briefing",
+      "title": "Read the briefing",
+      "description": "Placeholder objective used only for catalog metadata; the entry cannot be launched.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 0,
+        "validator": "not-run",
+        "criteria": [
+          "not runnable"
+        ]
+      },
+      "hints": []
+    }
+  ],
+  "validators": [],
+  "provisioner": {
+    "script": "none",
+    "timeoutSeconds": 10
+  },
+  "walkthrough": []
+}

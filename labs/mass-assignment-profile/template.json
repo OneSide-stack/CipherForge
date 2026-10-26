@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "id": "mass-assignment-profile",
+  "version": "1.0.0",
+  "status": "published",
+  "title": "Everyone Is HR",
+  "subtitle": "Escalate privileges through Solstice's profile update",
+  "category": "API Security",
+  "difficulty": "Beginner",
+  "estimatedMinutes": 18,
+  "skills": [
+    "Mass assignment",
+    "Object property control",
+    "RBAC",
+    "API hardening"
+  ],
+  "summary": "Solstice's PATCH /api/profile copies every submitted field onto the user record. Promote yourself to hr-admin, read the payroll ledger, then restrict the endpoint to a field allow-list.",
+  "scenario": "The HR self-service app lets employees update their display name and department. The update handler merges the whole JSON body, so privileged fields are accepted too. Escalate your role, capture the ledger marker and fix the merge.",
+  "prerequisites": [
+    "curl",
+    "Basic JSON"
+  ],
+  "learningObjectives": [
+    "Identify mass assignment in an update endpoint",
+    "Escalate a role through unexpected fields",
+    "Apply an explicit field allow-list"
+  ],
+  "authorizedScope": "Only the Solstice training app. Employee and payroll data are fictional.",
+  "riskSummary": "Mass assignment lets a normal user take privileged attributes, defeating authorisation logic elsewhere in the app.",
+  "remediation": "Bind only known fields to the update model, validate with a schema that rejects unknown keys, and derive roles server-side.",
+  "conclusion": "You promoted yourself through a stray field and then closed the endpoint with an allow-list.",
+  "baseXp": 95,
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "jq",
+      "python3",
+      "labctl"
+    ]
+  },
+  "services": [
+    {
+      "name": "app",
+      "role": "target",
+      "app": "mass-assignment-profile/app/server.mjs",
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "http",
+          "published": true,
+          "name": "web"
+        }
+      ],
+      "health": {
+        "kind": "http",
+        "path": "/api/health",
+        "expectStatus": 200,
+        "expectBody": "solstice-hr",
+        "timeoutSeconds": 30
+      },
+      "flagObjectives": [
+        "profile-flag"
+      ]
+    }
+  ],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny",
+    "internalPorts": [
+      8080
+    ]
+  },
+  "objectives": [
+    {
+      "id": "profile-flag",
+      "title": "Become hr-admin",
+      "description": "Send a PATCH with a role field, then read /api/payroll/ledger and submit the marker.",
+      "validation": {
+        "type": "flag",
+        "objectiveKind": "flag",
+        "xp": 45
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "`curl -s -X PATCH -H 'content-type: application/json' -d '{\"role\":\"hr-admin\"}' $CF_TARGET_URL/api/profile`",
+          "xpPenalty": 5
+        }
+      ]
+    },
+    {
+      "id": "whitelist",
+      "title": "Allow-list profile fields",
+      "description": "Apply the field allow-list policy. The live check confirms the role cannot be changed while normal profile edits still apply.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 55,
+        "validator": "field-whitelist",
+        "criteria": [
+          "role escalation blocked",
+          "payroll ledger returns 403",
+          "ordinary edits still succeed"
+        ]
+      },
+      "hints": [
+        {
+          "id": "h1",
+          "text": "Apply `{\"fieldWhitelist\": true}` with `labctl policy apply -`.",
+          "xpPenalty": 5
+        }
+      ]
+    }
+  ],
+  "validators": [
+    "field-whitelist"
+  ],
+  "provisioner": {
+    "script": "mass-assignment-profile/provision.mjs",
+    "timeoutSeconds": 45
+  },
+  "walkthrough": [
+    {
+      "title": "Read your profile",
+      "body": "Note your current role.",
+      "snippet": "curl -s $CF_TARGET_URL/api/profile | jq .user"
+    },
+    {
+      "title": "Escalate",
+      "body": "Add the privileged field to the update.",
+      "snippet": "curl -s -X PATCH -H 'content-type: application/json' -d '{\"role\":\"hr-admin\"}' $CF_TARGET_URL/api/profile | jq .user; curl -s $CF_TARGET_URL/api/payroll/ledger | jq"
+    },
+    {
+      "title": "Restrict the merge",
+      "body": "Only allow the three real profile fields.",
+      "snippet": "echo '{\"fieldWhitelist\": true}' | labctl policy apply -"
+    }
+  ]
+}

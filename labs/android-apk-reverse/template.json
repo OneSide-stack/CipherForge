@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "android-apk-reverse",
+  "version": "0.1.0",
+  "status": "coming_soon",
+  "comingSoon": true,
+  "title": "Unpack the Vault",
+  "subtitle": "Reverse a mobile build to recover a hardcoded secret",
+  "category": "Malware Analysis",
+  "difficulty": "Intermediate",
+  "estimatedMinutes": 45,
+  "baseXp": 165,
+  "skills": [
+    "Android",
+    "Decompilation",
+    "Crypto review"
+  ],
+  "summary": "Planned lab: decompile a training APK, follow the crypto routine and recover a fictional licence token.",
+  "scenario": "A synthetic Android build ships an obfuscated key. Decompile it, trace key derivation and validate the recovered token.",
+  "availabilityNote": "Planned \u2014 the Android emulator image is not available in this deployment; the workspace-only APK variant is in review.",
+  "prerequisites": [
+    "Prior labs in the same category recommended"
+  ],
+  "learningObjectives": [
+    "Practise Android in a contained session",
+    "Practise Decompilation in a contained session",
+    "Practise Crypto review in a contained session"
+  ],
+  "authorizedScope": "Not yet runnable. This entry is catalogued so learners can plan; no session can be started.",
+  "riskSummary": "This entry is a roadmap item; the risk description will be finalised with the lab.",
+  "remediation": "Never embed long-lived secrets in mobile binaries; use short-lived tokens bound to the device.",
+  "conclusion": "Planned lab \u2014 not yet available.",
+  "workspace": {
+    "image": "cipherforge/workspace:1.2.0",
+    "tools": [
+      "curl",
+      "python3",
+      "jq"
+    ]
+  },
+  "services": [],
+  "resources": {
+    "cpus": 0.5,
+    "memoryMb": 320,
+    "pids": 96,
+    "writableDiskMb": 64,
+    "maxMinutes": 45,
+    "idleTimeoutMinutes": 20
+  },
+  "network": {
+    "outbound": "deny"
+  },
+  "objectives": [
+    {
+      "id": "briefing",
+      "title": "Read the briefing",
+      "description": "Placeholder objective used only for catalog metadata; the entry cannot be launched.",
+      "validation": {
+        "type": "check",
+        "objectiveKind": "check",
+        "xp": 0,
+        "validator": "not-run",
+        "criteria": [
+          "not runnable"
+        ]
+      },
+      "hints": []
+    }
+  ],
+  "validators": [],
+  "provisioner": {
+    "script": "none",
+    "timeoutSeconds": 10
+  },
+  "walkthrough": []
+}
