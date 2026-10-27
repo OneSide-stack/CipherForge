@@ -76,7 +76,7 @@ out('cross-user terminal blocked',String(snoopTerm).includes('403')||String(snoo
 const ext=await req('POST',`/api/sessions/${sid}/extend`,{minutes:10}); out('session extend',ext.status===200,ext.json?.session?.expiresAt ?? JSON.stringify(ext.json));
 const stop=await req('POST',`/api/sessions/${sid}/stop`,{}); out('stop session',stop.json?.session?.state==='stopped',stop.json?.session?.state);
 const summary=await req('GET','/api/me/summary');
-out('progress summary',summary.status===200 && !!summary.json.rank?.name, `xp=${summary.json?.xp} rank=${summary.json?.rank?.name} hints=${summary.json?.stats?.hintsUsed}`);
+out('progress summary',summary.status===200 && !!summary.json.rank?.name, `xp=${summary.json?.xp} rank=${summary.json?.rank?.name} labs=${summary.json?.stats?.labs} hints=${summary.json?.stats?.hints}`);
 const paths=await req('GET','/api/paths'); out('learning paths',paths.json.paths?.length>=5,`n=${paths.json?.paths?.length}`);
 const ach=await req('GET','/api/achievements'); out('achievements catalog',ach.json.achievements?.length>=10,`n=${ach.json?.achievements?.length}`);
 const lb=await req('GET','/api/leaderboard'); out('leaderboard',lb.status===200 && Array.isArray(lb.json.leaderboard),`n=${lb.json?.leaderboard?.length}`);

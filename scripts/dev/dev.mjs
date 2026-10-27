@@ -151,6 +151,21 @@ async function main() {
   process.env.DATABASE_URL = databaseUrl;
   const dbEnv = { DATABASE_URL: databaseUrl, CF_REPO_ROOT: repo, CF_APP_SECRET: process.env.CF_APP_SECRET };
 
+  // A fresh clone has no compiled backend yet; build it so `npm run dev` works
+  // directly after `npm install` (the README quick start relies on this).
+  const backendArtifacts = [
+    path.join(repo, 'apps/api/dist/db/migrate.js'),
+    path.join(repo, 'apps/api/dist/index.js'),
+    path.join(repo, 'apps/runner/dist/index.js'),
+  ];
+  if (backendArtifacts.some((file) => !fs.existsSync(file))) {
+    if (!fs.existsSync(path.join(repo, 'node_modules/typescript'))) {
+      throw new Error('backend is not built and dev dependencies are missing — run npm install first');
+    }
+    log('backend is not built; compiling shared + api + runner');
+    await runOnce('build-backend', ['npm', 'run', 'build:backend']);
+  }
+
   log('running database migrations');
   await runOnce('migrate', ['node', 'apps/api/dist/db/migrate.js'], dbEnv);
   log('seeding catalog, achievements, paths and development accounts');

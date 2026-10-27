@@ -63,3 +63,20 @@ node -e "require('node-pty')"                       # native module built
 ```
 
 If the native module is missing, rebuild with `npm rebuild node-pty --build-from-source`.
+
+### `npm install` fails while building node-pty
+
+Symptom: `gyp http fetch GET https://nodejs.org/download/release/.../node-vX-headers.tar.gz
+... ECONNRESET` and `gyp ERR! configure error`. `node-pty` compiles against Node headers,
+and node-gyp downloads them when it cannot find a local copy.
+
+Fix: reuse the headers that ship with the installed Node build.
+
+```bash
+npm_config_nodedir=/usr/local npm install     # typical for Node installed under /usr/local
+# or point at the right prefix: npm_config_nodedir=$(dirname $(dirname $(which node)))
+node -e "require('node-pty'); console.log('node-pty ok')"
+```
+
+Then re-run `npm run setup:sandbox` so the module is copied into the lab asset tree
+(`~/.cache/cipherforge/assets/node_modules/node-pty`).

@@ -74,6 +74,12 @@ npm run setup:sandbox      # one-off: builds the 645 MB sandbox rootfs + assets 
 npm run dev                # embedded PostgreSQL :54329, runner :7100, API :5000, web build
 ```
 
+`npm run dev` compiles the backend on first run if `apps/*/dist` is missing, so the three
+commands above are all a clean clone needs. `npm install` builds the `node-pty` native module
+(the real terminal); if the machine cannot reach `nodejs.org` for headers, point the build at
+local headers instead: `npm_config_nodedir=/usr/local npm install` (see
+`docs/troubleshooting.md`).
+
 Then open <http://127.0.0.1:5000>. Development accounts (override with `CF_SEED_*` envs):
 
 | Role | Email | Password |
