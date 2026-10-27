@@ -245,6 +245,8 @@ Copy `.env.example` to `.env` for local overrides. Important variables:
 | `CF_PROVISION_PER_HOUR` | Per-learner session quota (default 12) |
 | `CF_MAX_SESSIONS` | Runner capacity |
 | `CF_SEED_ADMIN_EMAIL` / `CF_SEED_ADMIN_PASSWORD` | Bootstrap admin account |
+| `CF_PREVIEW_FRAME_HOSTS` | Hostname suffixes allowed to iframe the app (cloud previews, default `.e2b.app` outside production) |
+| `CF_PREVIEW_FRAME_ANCESTORS` | Extra ancestor origins for those preview hosts; `*` (dev default) keeps an embedded preview working |
 
 Never commit real secrets. The development seed credentials exist only to make `npm run dev`
 usable; change them before exposing the app.

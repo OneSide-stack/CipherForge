@@ -42,6 +42,25 @@ export function createApp() {
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }),
   );
+  // Cloud preview hosts embed the app inside their own document, which the strict
+  // same-origin framing policy above would block. Relax framing only for the
+  // hostname suffixes explicitly configured for previews; every other host keeps
+  // `frame-ancestors 'self'` + X-Frame-Options: SAMEORIGIN.
+  if (config.previewFrameHosts.length) {
+    app.use((req, res, next) => {
+      const host = String(req.headers.host ?? '').split(':')[0].toLowerCase();
+      if (config.previewFrameHosts.some((suffix) => host === suffix.replace(/^\./, '') || host.endsWith(suffix))) {
+        const csp = res.getHeader('content-security-policy');
+        const ancestors = ["'self'", ...config.previewFrameHosts.map((s) => `https://*${s}`)];
+        if (config.previewFrameAncestors === '*') ancestors.push('*');
+        if (typeof csp === 'string') {
+          res.setHeader('content-security-policy', csp.replace(/frame-ancestors [^;]+/, `frame-ancestors ${ancestors.join(' ')}`));
+        }
+        res.removeHeader('x-frame-options');
+      }
+      next();
+    });
+  }
   app.use(compression());
   // Keep the raw bytes: the lab gateway must forward the learner's original
   // form/JSON body to the target service untouched.

@@ -37,6 +37,16 @@ export const config = {
   seedLearnerEmail: env.CF_LEARNER_EMAIL ?? (isProd ? '' : 'learner@cipherforge.dev'),
   seedLearnerPassword: env.CF_LEARNER_PASSWORD ?? (isProd ? '' : 'CipherForge!2024'),
   frontendOrigin: env.CF_FRONTEND_ORIGIN ?? '',
+  // Hostname suffixes whose origin is allowed to embed the SPA in an iframe.
+  // Cloud preview environments (e.g. *.e2b.app) serve the app inside their own
+  // document; production deployments should leave this empty.
+  previewFrameHosts: (env.CF_PREVIEW_FRAME_HOSTS ?? (isProd ? '' : '.e2b.app'))
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+  // Extra ancestors allowed for preview hosts: '*' keeps the app embeddable when
+  // the hosting console frames it from an origin we cannot know ahead of time.
+  previewFrameAncestors: env.CF_PREVIEW_FRAME_ANCESTORS ?? (isProd ? '' : '*'),
   version: '1.0.0',
   runtimeDir: env.CF_RUNTIME_DIR ?? path.join(os.homedir(), '.cache', 'cipherforge'),
 };
