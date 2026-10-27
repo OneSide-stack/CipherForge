@@ -49,3 +49,25 @@
 * Flags are never logged by the API; only objective IDs, hashes and outcomes appear.
 * `CF_SESSION_SECRET` exists only inside the supervisor process; target apps get a derived
   `CF_APP_SEED` and only the flags their service is supposed to reveal.
+
+## Browser hardening and preview embeddings
+
+The API serves the SPA with Helmet defaults plus a strict CSP: `default-src 'self'`, no
+inline scripts, `frame-ancestors 'self'`, `X-Frame-Options: SAMEORIGIN`, HSTS in production,
+COOP/CORP, and `cache-control: no-store` on `/api/*`. Lab target responses never inherit
+these headers; the gateway strips framing and cookie headers from target traffic.
+
+Cloud preview environments embed the app inside *their* document, which the strict framing
+policy would block. That relaxation is host-scoped and explicit:
+
+| Setting | Effect |
+| --- | --- |
+| `CF_PREVIEW_FRAME_HOSTS` | Comma-separated hostname suffixes (default `.e2b.app` outside production). Only requests whose `Host` matches get the relaxed policy. |
+| `CF_PREVIEW_FRAME_ANCESTORS` | Extra ancestor sources added for those hosts; `*` (development default) allows an unknown console origin to embed the preview. |
+
+Every other host — including anything reached by IP or a real domain — keeps
+`frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`. In production, leave
+`CF_PREVIEW_FRAME_HOSTS` empty so no host can frame the app at all, or list only the console
+host you actually use. Clickjacking exposure is limited even on preview hosts because every
+state change requires a cookie session *plus* the per-session CSRF token and an accepted
+`Origin`.
